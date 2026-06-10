@@ -7,11 +7,14 @@ destroy the committee's trust in the tool.
 """
 from __future__ import annotations
 
+import pytest
+
 from jobs.scout_refresh import (
     MAX_SPONSOR_LINKS_PER_SEED,
     brand_on_page,
     existing_lead_update,
     find_sponsor_links,
+    is_institution,
     new_lead_row,
     normalize_ws,
     page_to_text,
@@ -49,6 +52,26 @@ def test_brand_on_page_whitespace_normalized() -> None:
 def test_brand_on_page_rejects_hallucinations() -> None:
     assert not brand_on_page("Nike", "Sponsors: boAt, Red Bull, Unstop.")
     assert not brand_on_page("Coca-Cola", "")
+
+
+# --- institution filter (observed live: universities extracted as sponsors) -----
+@pytest.mark.parametrize(
+    "name",
+    ["Deakin University", "University of Melbourne", "Fed Uni. Australia",
+     "IIT Bombay", "BITS Pilani", "JECRC College", "Indian Institute of Technology",
+     "Delhi Public School"],
+)
+def test_institutions_are_rejected(name: str) -> None:
+    assert is_institution(name)
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["Coding Ninjas", "L&T EduTech", "Unstop", "EC-Council, USA", "Truechip",
+     "boAt", "Red Bull", "TCS", "Kalvium", "PayTM"],
+)
+def test_real_brands_pass_institution_filter(name: str) -> None:
+    assert not is_institution(name)
 
 
 # --- fetch helpers --------------------------------------------------------------

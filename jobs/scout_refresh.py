@@ -103,6 +103,21 @@ def brand_on_page(brand_name: str, page_text: str) -> bool:
     return normalize_ws(brand_name).lower() in normalize_ws(page_text).lower()
 
 
+# Deterministic guard against academic institutions extracted as "sponsors"
+# (observed live: JECRC's homepage lists partner universities; the LLM offered
+# "Deakin University" as a lead). Prompt rules ask for exclusion too, but a
+# programmatic check is the one that actually holds.
+_INSTITUTION_TOKENS = frozenset(
+    {"university", "univ", "uni", "college", "institute", "institution",
+     "school", "vidyalaya", "vishwavidyalaya", "iit", "nit", "iiit", "bits"}
+)
+
+
+def is_institution(name: str) -> bool:
+    """True when a name looks like an academic institution, not a brand."""
+    return not _INSTITUTION_TOKENS.isdisjoint(re.findall(r"[a-z0-9]+", name.lower()))
+
+
 def existing_lead_update(score: float) -> dict[str, Any]:
     """The ONLY payload Scout may apply to an EXISTING lead.
 
@@ -319,6 +334,7 @@ class RunStats:
     leads_rescored: int = 0
     llm_skips: int = 0
     rejected_not_on_page: int = 0
+    rejected_institutions: int = 0
     touched_brand_ids: set[int] = field(default_factory=set)
 
     def as_dict(self) -> dict[str, int]:
@@ -326,7 +342,7 @@ class RunStats:
 
 
 PAGE_PROMPT = """From this college-fest webpage text, extract commercial brands that appear to be SPONSORS or PARTNERS of the fest.
-Rules: exclude the fest itself, the host college/university, student clubs, and government bodies. For each brand give a verbatim snippet (a short quote from the text where it appears) and a confidence 0-1.
+Rules: exclude the fest itself, student clubs, government bodies, and ALL universities, colleges, institutes, and schools — domestic or foreign (academic partners are not sponsors). Only commercial companies/brands. For each brand give a verbatim snippet (a short quote from the text where it appears) and a confidence 0-1.
 Schema: {{"brands": [{{"brand_name": str, "snippet": str, "confidence": float}}]}}
 Fest: {fest_name}
 Page text:
@@ -349,6 +365,10 @@ def process_seed_page(client: Any, stats: RunStats, seed: dict[str, Any],
     for brand in result.brands:
         normalized = normalize_brand_name(brand.brand_name)
         if len(normalized) < 2 or normalized == fest_norm:
+            continue
+        if is_institution(brand.brand_name):
+            stats.rejected_institutions += 1
+            logger.info("Rejected %r — academic institution, not a brand.", brand.brand_name)
             continue
         if not brand_on_page(brand.brand_name, page_text):
             stats.rejected_not_on_page += 1
@@ -378,7 +398,12 @@ def process_news_query(client: Any, stats: RunStats, fetcher: PoliteFetcher,
             continue
         article = articles[brand.article_index]
         normalized = normalize_brand_name(brand.brand_name)
-        if len(normalized) < 2 or not brand_on_page(brand.brand_name, article["text"]):
+        if len(normalized) < 2:
+            continue
+        if is_institution(brand.brand_name):
+            stats.rejected_institutions += 1
+            continue
+        if not brand_on_page(brand.brand_name, article["text"]):
             stats.rejected_not_on_page += 1
             continue
         brand_id, created = get_or_create_brand(client, brand.brand_name, normalized)
