@@ -87,8 +87,11 @@ never in the Streamlit app.
 Approved schema amendments (2026-06-10):
 - `pitch_memory.embedding` is **vector(768)** (Gemini text-embedding-004), not 384.
 - `brands.is_demo` and `leads.is_demo` boolean default false — demo-data kill switch.
-  Demo rows are badged in the UI, Generate Deck is disabled on demo leads, and
-  production purge is one DELETE per table.
+  Demo rows are badged in the UI and production purge is one DELETE per table.
+  Refined 2026-06-11: demo leads generate only watermarked TEST decks ("DO NOT
+  SEND" banner, TEST_ filename, prefixed email) for junior practice; real-lead
+  deck generation is hard-blocked while core/chapter_facts.py contains any
+  "[UPDATE ME" placeholder.
 - `outcomes.event` enum is (sent, replied, meeting, signed, ghosted, rejected) to match
   the one-tap UI spec (original `opened_meeting` was split into its two real events).
 - Idempotency constraints: `evidence` unique(brand_id, source_url),

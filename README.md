@@ -59,6 +59,25 @@ Scout finds real sponsor leads automatically. One-time setup:
 5. Optional: add `GITHUB_ACTIONS_URL` (your repo's Actions page URL) to
    Streamlit secrets to get a "Run Scout now" button on the Admin page.
 
+## Setup (Phase 3 — Pitch)
+
+1. **Apply the Pitch migration**: SQL Editor → paste all of
+   [supabase/migrations/003_pitch.sql](supabase/migrations/003_pitch.sql) → Run.
+   Creates the private `decks` storage bucket and its access rules.
+2. **Fill in the chapter facts** (admin, one time): edit
+   [core/chapter_facts.py](core/chapter_facts.py) and replace every
+   `[UPDATE ME …]` with REAL numbers — past gate counts, the actual Instagram
+   follower count, the official fest name and dates. **Never inflate**: these go
+   into documents sponsors read and may verify.
+   Until this is done, decks for real brands are locked; demo leads produce
+   watermarked 🧪 TEST decks for practice.
+3. Generate: Lead Board → pick a lead → **Generate Deck** → download the PPTX
+   and copy the email. **Review and edit before sending. Never send unread AI
+   output.** There is no send button anywhere, on purpose.
+
+Decks are archived versioned (`deck_v1`, `deck_v2`, …) — regenerating never
+overwrites an older deck.
+
 ## Roles
 
 | Role | Can do |

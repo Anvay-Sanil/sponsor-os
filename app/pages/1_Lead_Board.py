@@ -158,10 +158,14 @@ if not read_only:
             st.rerun()
         except Exception:  # noqa: BLE001
             st.error("Couldn't assign — check your connection and try again.")
-    action_cols[1].button(
-        "🎨 Generate Deck", use_container_width=True, disabled=True,
-        help="Demo leads can't generate decks." if is_demo else "Coming in Phase 3.",
-    )
+    deck_label = "🧪 Test Deck" if is_demo else "🎨 Generate Deck"
+    if action_cols[1].button(
+        deck_label, use_container_width=True,
+        help="Demo lead → watermarked practice deck only." if is_demo
+        else "Builds a bespoke deck + email for this brand.",
+    ):
+        st.session_state.deck_lead_id = lead["id"]
+        st.switch_page("pages/3_Deck_Generator.py")
     action_cols[2].button(
         "📝 Log Outcome", use_container_width=True, disabled=True,
         help="Coming in Phase 5.",

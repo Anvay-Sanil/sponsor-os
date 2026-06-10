@@ -14,3 +14,6 @@ beautifulsoup4>=4.12
 pyyaml>=6.0
 groq>=0.13
 google-generativeai>=0.8
+# Phase 3 (Pitch): deck rendering + palette extraction — light wheels, no torch.
+python-pptx>=1.0
+Pillow>=10.0

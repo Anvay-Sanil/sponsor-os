@@ -30,7 +30,11 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+# Free-tier reality, verified live 2026-06-11: gemini-2.0-flash has ZERO quota
+# ("limit: 0"), and gemini-2.5-flash allows only 20 requests/DAY — useless as a
+# fallback. flash-lite carries the workable free budget; Gemini is our backup
+# provider, so budget beats polish here.
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
 RATE_LIMIT_SLEEP_SECONDS = 2.5  # free tiers allow ~30 req/min; stay well under
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
@@ -94,18 +98,52 @@ def _validate(raw: str, model_cls: type[ModelT]) -> tuple[ModelT | None, str]:
         return None, str(exc)[:600]
 
 
+def _looks_rate_limited(message: str) -> bool:
+    lowered = message.lower()
+    return "429" in lowered or "rate" in lowered and "limit" in lowered or "quota" in lowered
+
+
 def extract_json(
     prompt: str,
     model_cls: type[ModelT],
     *,
     system: str = "You are a precise data extraction engine. Reply with ONLY valid JSON matching the requested schema — no prose, no markdown.",
     sleep_seconds: float = RATE_LIMIT_SLEEP_SECONDS,
+    rate_limit_backoff_seconds: float = 30.0,
 ) -> ModelT | None:
     """Run `prompt` through the provider chain, returning a validated model.
 
     Returns None when the output never validated (caller skips the item).
-    Raises LLMUnavailableError when no provider could be reached at all.
+    If the whole pass failed and at least one failure was a rate limit
+    (Gemini free tier allows only 5 requests/minute), waits once and makes a
+    second pass. Raises LLMUnavailableError when nothing is reachable.
     """
+    result = _provider_pass(prompt, model_cls, system, sleep_seconds)
+    if isinstance(result, _AllDown) and result.rate_limited:
+        logger.info("All providers rate-limited; backing off %.0fs for one retry pass.",
+                    rate_limit_backoff_seconds)
+        time.sleep(rate_limit_backoff_seconds)
+        result = _provider_pass(prompt, model_cls, system, sleep_seconds)
+    if isinstance(result, _AllDown):
+        raise LLMUnavailableError("All LLM providers failed: " + " | ".join(result.errors))
+    return result.value
+
+
+class _AllDown:
+    def __init__(self, errors: list[str]) -> None:
+        self.errors = errors
+        self.rate_limited = any(_looks_rate_limited(error) for error in errors)
+
+
+class _Outcome:
+    def __init__(self, value: ModelT | None) -> None:
+        self.value = value
+
+
+def _provider_pass(prompt: str, model_cls: type[ModelT], system: str,
+                   sleep_seconds: float) -> "_Outcome | _AllDown":
+    """One walk down the provider chain. Returns _Outcome on any verdict
+    (parsed model or validated-twice-failed None), _AllDown if unreachable."""
     transport_errors: list[str] = []
     for name, call in PROVIDER_CALLS.items():
         try:
@@ -119,7 +157,7 @@ def extract_json(
         parsed, error = _validate(raw, model_cls)
         if parsed is not None:
             time.sleep(sleep_seconds)
-            return parsed
+            return _Outcome(parsed)
 
         # One retry on the SAME provider with the validation error fed back.
         logger.info("Provider %s returned invalid JSON; retrying with feedback.", name)
@@ -138,8 +176,8 @@ def extract_json(
         parsed_retry, error_retry = _validate(raw_retry, model_cls)
         time.sleep(sleep_seconds)
         if parsed_retry is not None:
-            return parsed_retry
+            return _Outcome(parsed_retry)
         logger.warning("Provider %s failed validation twice (%s); skipping item.", name, error_retry)
-        return None  # schema failure twice => skip this item, don't burn quota
+        return _Outcome(None)  # schema failure twice => skip item, don't burn quota
 
-    raise LLMUnavailableError("All LLM providers failed: " + " | ".join(transport_errors))
+    return _AllDown(transport_errors)

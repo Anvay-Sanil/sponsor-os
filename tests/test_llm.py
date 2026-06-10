@@ -76,3 +76,32 @@ def test_all_providers_down_raises_unavailable(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(llm, "PROVIDER_CALLS", providers)
     with pytest.raises(llm.LLMUnavailableError):
         llm.extract_json("extract", Item, sleep_seconds=0)
+
+
+def test_rate_limited_pass_backs_off_then_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Gemini free tier = 5 req/min: a fully rate-limited pass gets ONE retry pass."""
+    calls: list[int] = []
+
+    def flaky_quota(prompt: str, system: str) -> str:
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("429 quota exceeded, retry in 22s")
+        return VALID
+
+    monkeypatch.setattr(llm, "PROVIDER_CALLS", {"p1": flaky_quota})
+    result = llm.extract_json("extract", Item, sleep_seconds=0, rate_limit_backoff_seconds=0)
+    assert result is not None and result.name == "boAt"
+    assert len(calls) == 2
+
+
+def test_plain_outage_gets_no_backoff_pass(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[int] = []
+
+    def hard_down(prompt: str, system: str) -> str:
+        calls.append(1)
+        raise ConnectionError("connection refused")
+
+    monkeypatch.setattr(llm, "PROVIDER_CALLS", {"p1": hard_down})
+    with pytest.raises(llm.LLMUnavailableError):
+        llm.extract_json("extract", Item, sleep_seconds=0, rate_limit_backoff_seconds=0)
+    assert len(calls) == 1  # no second pass for non-rate-limit outages
