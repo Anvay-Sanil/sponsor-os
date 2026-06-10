@@ -19,7 +19,7 @@ from typing import Any, Callable
 
 from pydantic import BaseModel, Field, field_validator
 
-from core import llm
+from core import llm, pricing
 from core.chapter_facts import CHAPTER_FACTS, missing_facts
 from core.deck_render import render_deck
 from core.palette import extract_palette
@@ -210,6 +210,28 @@ def build_narrative(brand: dict[str, Any], research: BrandResearch | None,
     return None
 
 
+def _reach_extras(client: Any, tiers: list[dict[str, Any]], suggested: str,
+                  ) -> tuple[dict[str, str] | None, str | None]:
+    """Per-tier reach cells + the suggested tier's ROI memo from cached
+    posteriors. (None, None) when the model isn't fitted — decks keep their
+    pre-Phase-4 'indicative' behavior."""
+    posteriors, _ = pricing.fetch_posteriors(client)
+    if not posteriors:
+        return None, None
+    reaches = {str(tier.get("name")): pricing.reach_cell(tier.get("components_json") or {}, posteriors)
+               for tier in tiers}
+    memo = None
+    for tier in tiers:
+        if str(tier.get("name")) == suggested and tier.get("base_price"):
+            samples, _unmodeled = pricing.tier_reach_samples(
+                tier.get("components_json") or {}, posteriors)
+            if samples is not None:
+                memo = pricing.deck_roi_memo(suggested, float(tier["base_price"]),
+                                             pricing.reach_summary(samples))
+            break
+    return reaches, memo
+
+
 # ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
@@ -248,8 +270,10 @@ def generate_pitch(client: Any, lead: dict[str, Any], brand: dict[str, Any],
     on_stage("Building slides…")
     title = narrative.title_line if not is_test else f"TEST · {narrative.title_line}"[:60]
     narrative.title_line = title
+    tier_reaches, roi_memo = _reach_extras(client, tiers, tier_name)
     pptx_bytes = render_deck(narrative, str(brand.get("name")), palette, tiers,
-                             tier_name, CHAPTER_FACTS, is_test)
+                             tier_name, CHAPTER_FACTS, is_test,
+                             tier_reaches=tier_reaches, roi_memo=roi_memo)
     email_text = assemble_email(narrative, is_test)
 
     on_stage("Saving…")

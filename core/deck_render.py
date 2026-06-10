@@ -72,15 +72,19 @@ def _bullets(slide: Any, name: str, lines: list[str], *, size: int = 16) -> None
             run.font.color.rgb = _rgb(DARK_TEXT)
 
 
-def _tier_table(slide: Any, tiers: list[dict[str, Any]], primary: str) -> None:
+def _tier_table(slide: Any, tiers: list[dict[str, Any]], primary: str,
+                tier_reaches: dict[str, str] | None) -> None:
     anchor = _find(slide, "table_anchor")
     if anchor is None or not tiers:
         return
+    headers = ["Tier", "What you get", "Indicative price"]
+    if tier_reaches:
+        headers.append("Est. reach (10–90%)")
     rows = len(tiers) + 1
-    table = slide.shapes.add_table(rows, 3, anchor.left, anchor.top,
+    table = slide.shapes.add_table(rows, len(headers), anchor.left, anchor.top,
                                    anchor.width, anchor.height).table
     header_text = readable_text_color(primary)
-    for column, label in enumerate(("Tier", "What you get", "Indicative price")):
+    for column, label in enumerate(headers):
         cell = table.cell(0, column)
         cell.text = label
         cell.fill.solid()
@@ -97,8 +101,10 @@ def _tier_table(slide: Any, tiers: list[dict[str, Any]], primary: str) -> None:
             for key, value in components.items() if value
         )
         price = tier.get("base_price")
-        cells = (str(tier.get("name", "")), included or "—",
-                 f"₹{int(price):,}" if price else "—")
+        cells = [str(tier.get("name", "")), included or "—",
+                 f"₹{int(price):,}" if price else "—"]
+        if tier_reaches:
+            cells.append(tier_reaches.get(str(tier.get("name")), "—"))
         for column, text in enumerate(cells):
             cell = table.cell(row, column)
             cell.text = text
@@ -109,7 +115,9 @@ def _tier_table(slide: Any, tiers: list[dict[str, Any]], primary: str) -> None:
 
 def render_deck(narrative: Any, brand_name: str, palette: dict[str, str],
                 tiers: list[dict[str, Any]], suggested_tier: str,
-                facts: dict[str, str], is_test: bool) -> bytes:
+                facts: dict[str, str], is_test: bool,
+                tier_reaches: dict[str, str] | None = None,
+                roi_memo: str | None = None) -> bytes:
     """Fill the master template and return PPTX bytes. No network, no LLM."""
     prs = Presentation(str(TEMPLATE_PATH))
     s1, s2, s3, s4, s5, s6 = list(prs.slides)[:6]
@@ -147,8 +155,8 @@ def render_deck(narrative: Any, brand_name: str, palette: dict[str, str],
     _fill(s5, "accent_bar", primary)
     _set_text(s5, "heading", f"Packages — we suggest {suggested_tier}", size=28, bold=True,
               color=heading_color)
-    _tier_table(s5, tiers, primary)
-    _set_text(s5, "pricing_note", PRICING_NOTE, size=12)
+    _tier_table(s5, tiers, primary, tier_reaches)
+    _set_text(s5, "pricing_note", roi_memo or PRICING_NOTE, size=12)
 
     _fill(s6, "accent_band", primary)
     _set_text(s6, "cta_line", narrative.cta_line, size=28, bold=True, color=on_primary)
