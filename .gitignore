@@ -1,0 +1,32 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+*.pem
+*.key
+credentials.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Working memory / scratch (planning-with-files artifacts, not product)
+task_plan.md
+notes.md
+temp/
+plan/
+
+# Tooling
+.claude/logs/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,16 @@
+# Rival fest seed list — Scout (Phase 2) scrapes the public sponsor pages below.
+# Editable by admins. Public pages only; robots.txt is respected at crawl time.
+#
+# Format:
+#   - name: Fest name
+#     url: https://public-fest-website/sponsors
+#     notes: optional free text
+#
+# Examples (VERIFY each URL is live and public before enabling in Phase 2):
+fests: []
+#  - name: Oasis (BITS Pilani)
+#    url: https://www.bits-oasis.org
+#    notes: large culfest, strong brand roster
+#  - name: Techfest (IIT Bombay)
+#    url: https://techfest.org
+#    notes: flagship technical fest

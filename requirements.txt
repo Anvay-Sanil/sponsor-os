@@ -1,0 +1,10 @@
+# Sponsor OS — Streamlit Community Cloud requirements.
+# RULE: heavy ML deps (torch, transformers, numpyro, xgboost, sentence-transformers)
+# must NEVER be added here — they run in Colab notebooks only. The free Streamlit
+# tier cannot hold them in memory. Embeddings use the Gemini API (768-dim), not a
+# local model.
+streamlit>=1.37
+supabase>=2.5
+python-dotenv>=1.0
+pydantic>=2.7
+pytest>=8.2
