@@ -1,12 +1,9 @@
-"""Sponsor OS core package: database, auth, and (in later phases) llm/scoring/pricing/pitch."""
+"""Sponsor OS core package.
 
-from core.auth import can_write, has_access, require_role
-from core.db import get_client, get_secret
+Submodules are NOT imported eagerly: `auth` and `db` import Streamlit, but
+batch jobs in jobs/ must be able to import `core.llm` and `core.scoring`
+headlessly (GitHub Actions has no Streamlit installed). Python's import
+system resolves `from core import auth` to the submodule on demand.
+"""
 
-__all__ = [
-    "can_write",
-    "get_client",
-    "get_secret",
-    "has_access",
-    "require_role",
-]
+__all__ = ["auth", "db", "llm", "scoring"]

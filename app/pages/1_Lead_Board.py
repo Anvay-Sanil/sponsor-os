@@ -7,6 +7,7 @@ import streamlit as st
 
 import _bootstrap  # noqa: F401
 from core import auth, db
+from core.scoring import evidence_strength, strength_label
 
 st.set_page_config(page_title="Lead Board · Sponsor OS", page_icon="📋", layout="wide")
 role = auth.require_role("lead_board")
@@ -128,7 +129,23 @@ if not evidence_rows:
 for item in evidence_rows:
     label = SOURCE_LABEL.get(str(item.get("source_type")), str(item.get("source_type")))
     snippet = item.get("snippet") or ""
-    st.markdown(f"- **{label}** — {snippet} [View source ↗]({item.get('source_url')})")
+    signal = strength_label(evidence_strength(item))
+    region_tag = " · 📍 Jaipur-region source" if item.get("region_match") else ""
+    st.markdown(
+        f"- **{label}** ({signal}{region_tag}) — {snippet} "
+        f"[View source ↗]({item.get('source_url')})"
+    )
+
+with st.expander("❓ How is this score calculated?"):
+    st.markdown(
+        "Each piece of proof is weighted by **where it came from** (a rival fest's "
+        "own sponsor page counts most, then news, then posters and Instagram), "
+        "**how fresh it is** (proof loses half its weight every 6 months), and "
+        "**how confident we are** in the match. One solid proof scores about 35; "
+        "more independent proofs push the score up — but it never reaches 100, "
+        "because no amount of evidence makes a sponsorship certain. "
+        "This is a transparent rule, not an AI prediction."
+    )
 
 if not read_only:
     action_cols = st.columns(3)

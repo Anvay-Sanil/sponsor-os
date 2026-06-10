@@ -86,12 +86,100 @@ if profiles:
 else:
     st.caption("No members yet.")
 
-# --- Scout (Phase 2) -----------------------------------------------------------
+# --- Scout pipeline ------------------------------------------------------------
 st.subheader("Scout pipeline")
-st.info(
-    "🔧 Coming in **Phase 2**: edit the rival-fest seed list, see the last Scout "
-    "run's status and log, and a link to trigger a manual run on GitHub Actions."
-)
+
+run = db.fetch_latest_scout_run()
+if run is None:
+    st.info("Scout hasn't run yet. It runs every Monday morning automatically once GitHub Actions is set up.")
+else:
+    status_icon = {"success": "✅", "partial": "🟡", "failed": "🔴", "running": "⏳"}.get(run["status"], "❔")
+    st.markdown(f"**Last run:** {status_icon} `{run['status']}` — started {str(run['started_at'])[:16].replace('T', ' ')} UTC")
+    stats = run.get("stats") or {}
+    if stats:
+        stat_cols = st.columns(4)
+        stat_cols[0].metric("Pages scraped", stats.get("pages_ok", 0),
+                            help="Rival-fest pages fetched successfully this run.")
+        stat_cols[1].metric("Evidence saved", stats.get("evidence_written", 0),
+                            help="Verified proof items written to the database.")
+        stat_cols[2].metric("New brands", stats.get("brands_new", 0),
+                            help="Brands seen for the first time this run.")
+        stat_cols[3].metric("Hallucinations blocked", stats.get("rejected_not_on_page", 0),
+                            help="AI suggestions rejected because the brand wasn't actually on the page.")
+    if run.get("log"):
+        with st.expander("Run log"):
+            st.code(run["log"], language="text")
+
+actions_url = db.get_secret("GITHUB_ACTIONS_URL")
+if actions_url:
+    st.link_button("▶️ Run Scout now (GitHub Actions)", actions_url)
+else:
+    st.caption("Tip: set GITHUB_ACTIONS_URL in Streamlit secrets to get a one-click "
+               "'Run Scout now' button here. Until then: GitHub → Actions → Scout refresh → Run workflow.")
+
+# --- Rival-fest seeds ------------------------------------------------------------
+st.subheader("Rival-fest seed list")
+st.caption("Public fest websites Scout checks for sponsor evidence. Jaipur/Rajasthan "
+           "sources are tagged 📍 regional — those brands are warmer leads for us.")
+
+seeds = db.fetch_scout_seeds()
+if seeds:
+    st.dataframe(
+        [
+            {
+                "Fest": seed.get("name"),
+                "URL": seed.get("url"),
+                "Regional": "📍 yes" if seed.get("region_match") else "no",
+                "Active": "✅" if seed.get("enabled") else "⏸️ off",
+                "Notes": seed.get("notes") or "",
+            }
+            for seed in seeds
+        ],
+        use_container_width=True,
+        hide_index=True,
+        column_config={"URL": st.column_config.LinkColumn("URL")},
+    )
+    with st.form("toggle_seed"):
+        toggle_cols = st.columns([3, 1])
+        seed_by_label = {f"{seed['name']} ({'on' if seed['enabled'] else 'off'})": seed for seed in seeds}
+        picked_seed = toggle_cols[0].selectbox("Seed", list(seed_by_label))
+        if st.form_submit_button("Toggle on/off"):
+            seed_row = seed_by_label[picked_seed]
+            try:
+                db.get_client().table("scout_seeds").update(
+                    {"enabled": not seed_row["enabled"]}
+                ).eq("id", seed_row["id"]).execute()
+                st.rerun()
+            except Exception:  # noqa: BLE001
+                st.error("Couldn't update the seed — try again.")
+else:
+    st.caption("No seeds yet — the first Scout run imports the starter list automatically.")
+
+with st.form("add_seed"):
+    st.markdown("**Add a fest**")
+    add_cols = st.columns([2, 3, 1])
+    seed_name = add_cols[0].text_input("Fest name")
+    seed_url = add_cols[1].text_input("Website (public page)", placeholder="https://…")
+    seed_regional = add_cols[2].toggle("📍 Regional", value=True,
+                                       help="Is this a Jaipur/Rajasthan fest?")
+    if st.form_submit_button("Add seed"):
+        if not seed_name.strip() or not seed_url.strip().startswith("http"):
+            st.error("Give the fest a name and a full URL starting with https://")
+        else:
+            try:
+                db.get_client().table("scout_seeds").insert(
+                    {
+                        "name": seed_name.strip(),
+                        "url": seed_url.strip(),
+                        "region_match": seed_regional,
+                        "added_by": (auth.current_user() or {}).get("id"),
+                    }
+                ).execute()
+                st.success(f"Added {seed_name}. Scout will include it on its next run.")
+                st.rerun()
+            except Exception:  # noqa: BLE001
+                st.error("Couldn't add it — is that URL already in the list?")
+
 st.caption(
     "🧪 Demo data cleanup (run in the Supabase SQL editor when going live): "
     "`delete from leads where is_demo; delete from brands where is_demo;`"

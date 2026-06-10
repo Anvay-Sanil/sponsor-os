@@ -103,6 +103,22 @@ def fetch_invite_codes() -> list[dict[str, Any]]:
     return _safe_rows(query, "invite codes")
 
 
+def fetch_scout_seeds() -> list[dict[str, Any]]:
+    """All rival-fest seeds (Admin page editor)."""
+    client = get_client()
+    return _safe_rows(client.table("scout_seeds").select("*").order("created_at"), "scout seeds")
+
+
+def fetch_latest_scout_run() -> dict[str, Any] | None:
+    """Most recent Scout run summary, or None if Scout has never run."""
+    client = get_client()
+    rows = _safe_rows(
+        client.table("scout_runs").select("*").order("started_at", desc=True).limit(1),
+        "the last Scout run",
+    )
+    return rows[0] if rows else None
+
+
 def lead_status_counts() -> dict[str, int]:
     """Count of leads per status for the Home pipeline summary."""
     counts: dict[str, int] = {}

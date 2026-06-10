@@ -34,6 +34,31 @@ Runs entirely on free tiers. Total infrastructure cost: **₹0**.
    Sign up with the printed **admin** code first, then invite everyone else from
    the Admin page.
 
+## Setup (Phase 2 — Scout)
+
+Scout finds real sponsor leads automatically. One-time setup:
+
+1. **Apply the Scout migration**: Supabase Dashboard → SQL Editor → paste all of
+   [supabase/migrations/002_scout.sql](supabase/migrations/002_scout.sql) → Run.
+   (Fresh installs that ran the current `schema.sql` already have it.)
+2. **Get free LLM keys** and add to `.env`:
+   - `GROQ_API_KEY` — [console.groq.com](https://console.groq.com) → API Keys
+   - `GEMINI_API_KEY` — [aistudio.google.com](https://aistudio.google.com) → Get API key
+3. **Test locally** (optional but recommended):
+   ```bash
+   python jobs/scout_refresh.py
+   ```
+   Watch the log; afterwards the Lead Board shows real brands with evidence links,
+   and Admin shows the run summary.
+4. **Automate on GitHub**: push this repo to GitHub, then in the repo →
+   Settings → Secrets and variables → Actions, add: `SUPABASE_URL`,
+   `SUPABASE_SERVICE_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`.
+   Scout then runs every Monday ~8:30 AM IST, and on demand via
+   Actions → "Scout refresh" → Run workflow. The weekly run also keeps the
+   free Supabase project from pausing.
+5. Optional: add `GITHUB_ACTIONS_URL` (your repo's Actions page URL) to
+   Streamlit secrets to get a "Run Scout now" button on the Admin page.
+
 ## Roles
 
 | Role | Can do |
@@ -56,6 +81,15 @@ Runs entirely on free tiers. Total infrastructure cost: **₹0**.
 - **Supabase project "paused"** — the free tier pauses after 7 idle days. Open
   the dashboard and click Restore. (From Phase 2, the weekly Scout cron keeps it
   awake.)
+- **Scout stopped running on its own** — GitHub disables scheduled workflows
+  after 60 days without repo activity. Our workflow makes a tiny "heartbeat"
+  commit every scheduled run precisely to prevent this, but if it ever happens
+  (e.g. the workflow was disabled manually): GitHub → Actions → Scout refresh →
+  banner button **"Enable workflow"**. Worth a calendar reminder at semester
+  start: check that the last Scout run is green.
+- **Scout run says "partial"** — some site was down or an AI provider was
+  rate-limited. Nothing is broken: every run re-checks everything, so the next
+  run fills the gaps. Only investigate if it stays partial for weeks.
 
 ## Demo data
 

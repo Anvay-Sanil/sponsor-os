@@ -74,14 +74,38 @@ create table public.brands (
 );
 
 create table public.evidence (
-  id          bigint generated always as identity primary key,
-  brand_id    bigint not null references public.brands (id) on delete cascade,
-  source_url  text not null,
-  source_type public.evidence_source not null,
-  snippet     text,
-  confidence  double precision check (confidence between 0 and 1),
-  detected_at timestamptz not null default now(),
+  id           bigint generated always as identity primary key,
+  brand_id     bigint not null references public.brands (id) on delete cascade,
+  source_url   text not null,
+  source_type  public.evidence_source not null,
+  snippet      text,
+  confidence   double precision check (confidence between 0 and 1),
+  region_match boolean not null default false,     -- same-region (Jaipur) source
+  detected_at  timestamptz not null default now(),
   unique (brand_id, source_url)                    -- idempotent Scout upserts
+);
+
+-- Rival-fest seed list (admin-editable in the UI; YAML is bootstrap only).
+create table public.scout_seeds (
+  id           bigint generated always as identity primary key,
+  name         text not null,
+  url          text not null unique,
+  region_match boolean not null default false,
+  enabled      boolean not null default true,
+  notes        text,
+  added_by     uuid references public.profiles (id) on delete set null,
+  created_at   timestamptz not null default now()
+);
+
+-- One row per Scout execution; Admin page shows the latest.
+create table public.scout_runs (
+  id          bigint generated always as identity primary key,
+  started_at  timestamptz not null default now(),
+  finished_at timestamptz,
+  status      text not null default 'running'
+              check (status in ('running', 'success', 'partial', 'failed')),
+  stats       jsonb not null default '{}'::jsonb,
+  log         text
 );
 
 create table public.leads (
@@ -261,6 +285,8 @@ grant execute on function public.redeem_invite(text, text, text) to authenticate
 -- leads/decks/outcomes (no DELETE); admin full. Outcome corrections
 -- (UPDATE outcomes) are admin-only.
 -- ---------------------------------------------------------------------------
+alter table public.scout_seeds        enable row level security;
+alter table public.scout_runs         enable row level security;
 alter table public.profiles           enable row level security;
 alter table public.invite_codes       enable row level security;
 alter table public.brands             enable row level security;
@@ -329,6 +355,17 @@ create policy pitch_memory_admin on public.pitch_memory
   for all to authenticated
   using (public.get_my_role() = 'admin')
   with check (public.get_my_role() = 'admin');
+
+create policy scout_seeds_select on public.scout_seeds
+  for select to authenticated using (true);
+create policy scout_seeds_admin on public.scout_seeds
+  for all to authenticated
+  using (public.get_my_role() = 'admin')
+  with check (public.get_my_role() = 'admin');
+
+create policy scout_runs_select on public.scout_runs
+  for select to authenticated using (true);
+-- scout_runs writes: service-role key only (bypasses RLS); no client policy.
 
 -- leads: all read; sponsorship+admin write; only admin deletes.
 create policy leads_select on public.leads

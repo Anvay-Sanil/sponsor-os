@@ -1,0 +1,48 @@
+# Scout v1 — weekly lead refresh + Supabase free-tier keep-alive.
+# Manual run: Actions tab -> "Scout refresh" -> Run workflow.
+name: Scout refresh
+
+on:
+  schedule:
+    - cron: "0 3 * * 1" # Mondays 03:00 UTC = 08:30 IST
+  workflow_dispatch:
+
+permissions:
+  contents: write # heartbeat commit (see last step)
+
+jobs:
+  scout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install job dependencies (lean set, no Streamlit)
+        run: pip install -r requirements-jobs.txt
+
+      - name: Run Scout
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python jobs/scout_refresh.py
+
+      # GitHub disables scheduled workflows after 60 days without repo
+      # activity — exactly the off-season window when nobody commits and the
+      # Supabase keep-alive matters most. A weekly bot commit counts as
+      # activity, so the schedule (and the keep-alive) never silently dies.
+      - name: Heartbeat commit (keeps this schedule enabled)
+        if: github.event_name == 'schedule'
+        run: |
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/last_scout_heartbeat
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/last_scout_heartbeat
+          git commit -m "chore: scout heartbeat [skip ci]" || echo "nothing to commit"
+          git push

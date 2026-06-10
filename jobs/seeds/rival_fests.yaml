@@ -1,16 +1,45 @@
-# Rival fest seed list — Scout (Phase 2) scrapes the public sponsor pages below.
-# Editable by admins. Public pages only; robots.txt is respected at crawl time.
+# Rival-fest seed list — BOOTSTRAP ONLY.
+# On the first Scout run this file is imported into the scout_seeds table;
+# after that, admins edit seeds in the app's Admin page (the DB is the source
+# of truth). Public pages only; robots.txt is respected at crawl time.
 #
-# Format:
-#   - name: Fest name
-#     url: https://public-fest-website/sponsors
-#     notes: optional free text
+# region_match: true = Jaipur/Rajasthan source. A brand sponsoring in Jaipur
+# is a stronger signal for an MUJ event than the same brand in Mumbai.
 #
-# Examples (VERIFY each URL is live and public before enabling in Phase 2):
-fests: []
-#  - name: Oasis (BITS Pilani)
-#    url: https://www.bits-oasis.org
-#    notes: large culfest, strong brand roster
-#  - name: Techfest (IIT Bombay)
-#    url: https://techfest.org
-#    notes: flagship technical fest
+# URL liveness last verified: 2026-06-10. Fest microsites often go offline
+# between seasons — re-enable/fix them from the Admin page when they return.
+
+fests:
+  # --- national (volume; weaker affinity) ---
+  - name: Techfest (IIT Bombay)
+    url: https://techfest.org
+    region_match: false
+    notes: Flagship national technical fest; large sponsor roster. Verified live.
+  - name: Mood Indigo (IIT Bombay)
+    url: https://moodi.org
+    region_match: false
+    notes: Largest culfest. Site is JS-heavy off-season; scraper skips gracefully if empty.
+
+  # --- regional Jaipur/Rajasthan (high affinity) ---
+  - name: Vivacity (LNMIIT Jaipur)
+    url: https://vivacity.lnmiit.ac.in
+    region_match: true
+    notes: LNMIIT Jaipur annual fest. Verified live.
+  - name: JECRC University fests
+    url: https://jecrcuniversity.edu.in
+    region_match: true
+    notes: University site; sponsor-link follower picks up fest/sponsor pages.
+  - name: MUJ (our own past fests)
+    url: https://jaipur.manipal.edu
+    region_match: true
+    notes: Brands that sponsored MUJ events before are the warmest leads of all.
+  - name: Blitzschlag (MNIT Jaipur)
+    url: https://blitzschlag.in
+    region_match: true
+    enabled: false
+    notes: DNS dead off-season (checked 2026-06-10). Fix URL + enable when fest season starts.
+  - name: Oasis (BITS Pilani)
+    url: https://www.bits-oasis.org
+    region_match: true
+    enabled: false
+    notes: Timed out 2026-06-10 (Pilani = Rajasthan, counts as regional). Re-enable when live.
