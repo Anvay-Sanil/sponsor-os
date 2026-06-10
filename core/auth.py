@@ -90,6 +90,14 @@ def _friendly_auth_error(exc: Exception) -> str:
         return "Email or password is wrong. If you forgot your password, ask an admin to reset it."
     if "already registered" in text or "already exists" in text:
         return "This email already has an account — use the Log in tab instead."
+    if "database error" in text:
+        # Transient GoTrue 500 seen on freshly provisioned projects (e.g. while
+        # the auth service restarts after a settings change). Retrying works.
+        return (
+            "The signup service had a brief hiccup — wait 30 seconds and try once. "
+            "If it already said this once before, try the Log in tab: your account "
+            "may have been created anyway."
+        )
     if "password" in text and ("weak" in text or "at least" in text or "short" in text):
         return "Password is too short — use at least 6 characters."
     if "rate" in text or "429" in text:
