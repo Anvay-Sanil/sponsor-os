@@ -70,9 +70,11 @@ hard requirement, not a nice-to-have.
 - Pricing model: NumPyro (JAX) hierarchical Bayesian model, fit in Colab, posterior
   samples cached to Supabase; Streamlit simulator reads cached samples (no live MCMC)
 - Deck rendering: python-pptx against `templates/master_deck.pptx`
-- Embeddings/RAG (Pitch language memory): **Gemini `text-embedding-004` (free tier,
-  768-dim)** + pgvector on Supabase. No local embedding models — sentence-transformers
-  drags in torch and exceeds Streamlit free-tier memory. (Amended 2026-06-10.)
+- Embeddings/RAG (Pitch language memory): **Gemini `gemini-embedding-001` at
+  `output_dimensionality=768`** + pgvector on Supabase. No local embedding models —
+  sentence-transformers drags in torch and exceeds Streamlit free-tier memory.
+  (Amended 2026-06-10; model updated 2026-06-11 after Google retired
+  text-embedding-004 — the 768-dim schema is unchanged.)
 - Scheduling: GitHub Actions cron (weekly Scout refresh), `workflow_dispatch` for
   manual runs
 

@@ -44,7 +44,11 @@ class LLMUnavailableError(RuntimeError):
     """Every configured provider failed at transport level (e.g. both 429)."""
 
 
-EMBED_MODEL = os.environ.get("GEMINI_EMBED_MODEL", "models/text-embedding-004")
+# text-embedding-004 was retired by Google (404, verified live 2026-06-11);
+# gemini-embedding-001 is the GA replacement. output_dimensionality=768 is
+# REQUIRED — its native 3072 dims would not fit pitch_memory vector(768).
+EMBED_MODEL = os.environ.get("GEMINI_EMBED_MODEL", "models/gemini-embedding-001")
+EMBED_DIMS = 768
 
 
 def _call_embed(text: str) -> list[float]:
@@ -54,7 +58,8 @@ def _call_embed(text: str) -> list[float]:
     if not api_key:
         raise LLMUnavailableError("GEMINI_API_KEY not configured")
     genai.configure(api_key=api_key)
-    return genai.embed_content(model=EMBED_MODEL, content=text[:8000])["embedding"]
+    return genai.embed_content(model=EMBED_MODEL, content=text[:8000],
+                               output_dimensionality=EMBED_DIMS)["embedding"]
 
 
 # Tests monkeypatch this; embed_text below stays graceful either way.

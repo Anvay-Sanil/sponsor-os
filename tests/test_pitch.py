@@ -22,8 +22,9 @@ from core.pitch import (
     DeckNarrative,
     EvidenceBullet,
     assemble_email,
+    deck_path,
     fallback_bullets,
-    next_deck_path,
+    next_deck_version,
     suggest_tier,
     valid_bullets,
 )
@@ -120,8 +121,16 @@ def test_fallback_bullets_are_verbatim_and_anchored() -> None:
 
 # --- versioning, tiers, email ------------------------------------------------------
 def test_deck_paths_are_versioned_never_overwritten() -> None:
-    assert next_deck_path(7, 0) == "7/deck_v1.pptx"
-    assert next_deck_path(7, 3) == "7/deck_v4.pptx"
+    assert deck_path(7, 1) == "7/deck_v1.pptx"
+    assert deck_path(7, 4) == "7/deck_v4.pptx"
+
+
+def test_version_counter_clears_storage_orphans() -> None:
+    assert next_deck_version(0, []) == 1
+    assert next_deck_version(3, []) == 4
+    # orphan in storage with no table row (observed live 2026-06-11):
+    assert next_deck_version(0, ["deck_v1.pptx"]) == 2
+    assert next_deck_version(2, ["deck_v5.pptx", "unrelated.txt"]) == 6
 
 
 @pytest.mark.parametrize(("score", "tier"),

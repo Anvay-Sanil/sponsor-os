@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -123,9 +124,24 @@ def fallback_bullets(evidence: list[dict[str, Any]], limit: int = 3) -> list[Evi
     return bullets
 
 
-def next_deck_path(lead_id: int, existing_decks: int) -> str:
+def next_deck_version(existing_rows: int, storage_names: list[str]) -> int:
+    """Next version number, honoring BOTH the decks table and actual storage.
+
+    Storage can hold orphans (an upload whose decks-row insert failed); the
+    counter must clear them too, because storage policies deliberately allow
+    no UPDATE — nothing is ever overwritten, collisions are versioned past.
+    """
+    storage_max = 0
+    for name in storage_names:
+        match = re.fullmatch(r"deck_v(\d+)\.pptx", name)
+        if match:
+            storage_max = max(storage_max, int(match.group(1)))
+    return max(existing_rows, storage_max) + 1
+
+
+def deck_path(lead_id: int, version: int) -> str:
     """Versioned storage path — regeneration never overwrites (user request)."""
-    return f"{lead_id}/deck_v{existing_decks + 1}.pptx"
+    return f"{lead_id}/deck_v{version}.pptx"
 
 
 def assemble_email(narrative: DeckNarrative, is_test: bool) -> str:
@@ -288,8 +304,13 @@ def generate_pitch(client: Any, lead: dict[str, Any], brand: dict[str, Any],
     version = 1
     try:
         existing = client.table("decks").select("id").eq("lead_id", lead["id"]).execute().data or []
-        version = len(existing) + 1
-        storage_path = next_deck_path(int(lead["id"]), len(existing))
+        try:
+            storage_names = [str(item["name"]) for item in
+                             client.storage.from_("decks").list(str(lead["id"])) or []]
+        except Exception:  # noqa: BLE001 — listing failure => table count rules
+            storage_names = []
+        version = next_deck_version(len(existing), storage_names)
+        storage_path = deck_path(int(lead["id"]), version)
         client.storage.from_("decks").upload(
             storage_path, pptx_bytes,
             {"content-type": "application/vnd.openxmlformats-officedocument.presentationml.presentation"},
