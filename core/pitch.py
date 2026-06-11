@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from core import llm, pricing
 from core.chapter_facts import CHAPTER_FACTS, missing_facts
+from core.pitch_memory import build_style_block, fetch_style_examples
 from core.deck_render import render_deck
 from core.palette import extract_palette
 
@@ -161,7 +162,8 @@ def research_brand(brand: dict[str, Any], evidence: list[dict[str, Any]]) -> Bra
 
 
 def build_narrative(brand: dict[str, Any], research: BrandResearch | None,
-                    evidence: list[dict[str, Any]], tier_name: str) -> DeckNarrative | None:
+                    evidence: list[dict[str, Any]], tier_name: str,
+                    style_block: str = "") -> DeckNarrative | None:
     """Narrative JSON with evidence-anchored bullets. None only if all LLMs fail
     AND no deterministic fallback is possible."""
     allowed_ids = {int(item["id"]) for item in evidence if item.get("id") is not None}
@@ -185,6 +187,7 @@ def build_narrative(brand: dict[str, Any], research: BrandResearch | None,
         f"BRAND: {brand.get('name')} ({brand.get('industry') or 'unknown industry'})\n"
         f"RESEARCH: {research_block}\nEVIDENCE: {evidence_block}\n"
         f"FACTS: {json.dumps(CHAPTER_FACTS)}\nSUGGESTED TIER: {tier_name}"
+        f"{style_block}"
     )
     try:
         narrative = llm.extract_json(prompt, DeckNarrative)
@@ -263,7 +266,11 @@ def generate_pitch(client: Any, lead: dict[str, Any], brand: dict[str, Any],
 
     on_stage("Writing the story…")
     tier_name = suggest_tier(float(lead.get("evidence_score") or 0))
-    narrative = build_narrative(brand, research, evidence, tier_name)
+    # Winning-language memory (Phase 5): style only, demo-filtered for real leads.
+    style_query = f"{brand.get('industry') or ''} {research.summary if research else brand.get('name')}"
+    style_block = build_style_block(
+        fetch_style_examples(client, style_query, include_test=is_test))
+    narrative = build_narrative(brand, research, evidence, tier_name, style_block)
     if narrative is None:
         raise RuntimeError("The AI providers are busy right now — try again in a few minutes.")
 

@@ -70,10 +70,13 @@ if not visible:
     st.warning("No leads match those filters.")
     st.stop()
 
+has_smart_scores = any(lead.get("ml_score") is not None for lead in visible)
 rows = [
     {
         "Brand": ("🧪 " if lead.get("is_demo") else "") + str((lead.get("brands") or {}).get("name", "?")),
         "Score": round(float(lead.get("evidence_score") or 0)),
+        **({"Smart": round(float(lead["ml_score"]), 1) if lead.get("ml_score") is not None else None}
+           if has_smart_scores else {}),
         "Status": STATUS_CHIP.get(str(lead.get("status")), str(lead.get("status"))),
         "Industry": (lead.get("brands") or {}).get("industry") or "—",
         "Owner": (lead.get("profiles") or {}).get("name") or "Unassigned",
@@ -91,8 +94,12 @@ event = st.dataframe(
     column_config={
         "Score": st.column_config.ProgressColumn(
             "Evidence Score",
-            help="0–100: how much public proof we found that this brand sponsors student events. Higher = warmer lead.",
+            help="0–100: how much public proof we found that this brand sponsors student events. Higher = warmer lead. Always shown — this is the transparent score.",
             min_value=0, max_value=100, format="%d",
+        ),
+        "Smart": st.column_config.NumberColumn(
+            "Smart Score (beta)",
+            help="Learned from our logged outcomes — it estimates conversion IF we pursue, based only on leads we chose to contact. Use it alongside Evidence Score, never instead of it.",
         ),
     },
 )
@@ -166,9 +173,9 @@ if not read_only:
     ):
         st.session_state.deck_lead_id = lead["id"]
         st.switch_page("pages/3_Deck_Generator.py")
-    action_cols[2].button(
-        "📝 Log Outcome", use_container_width=True, disabled=True,
-        help="Coming in Phase 5.",
-    )
+    if action_cols[2].button("📝 Log Outcome", use_container_width=True,
+                             help="One tap on the Outcomes page logs it and updates this board."):
+        st.session_state.outcome_lead_id = lead["id"]
+        st.switch_page("pages/4_Outcomes.py")
 else:
     st.caption("You have read-only access — browsing and evidence links only.")

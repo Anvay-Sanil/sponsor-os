@@ -44,6 +44,40 @@ class LLMUnavailableError(RuntimeError):
     """Every configured provider failed at transport level (e.g. both 429)."""
 
 
+EMBED_MODEL = os.environ.get("GEMINI_EMBED_MODEL", "models/text-embedding-004")
+
+
+def _call_embed(text: str) -> list[float]:
+    import google.generativeai as genai  # lazy: same EOL-SDK caveat as _call_gemini
+
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise LLMUnavailableError("GEMINI_API_KEY not configured")
+    genai.configure(api_key=api_key)
+    return genai.embed_content(model=EMBED_MODEL, content=text[:8000])["embedding"]
+
+
+# Tests monkeypatch this; embed_text below stays graceful either way.
+EMBED_CALL = _call_embed
+
+
+def embed_text(text: str) -> list[float] | None:
+    """768-dim Gemini embedding, or None on ANY failure.
+
+    Embeddings are an enhancement (pitch language memory) — no provider
+    fallback exists (Groq has no embeddings API) and no caller may ever block
+    or crash on a failed embed. One attempt, log, move on.
+    """
+    if not text or not text.strip():
+        return None
+    try:
+        vector = EMBED_CALL(text)
+        return [float(value) for value in vector] if vector else None
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Embedding failed (skipping, not fatal): %s", exc)
+        return None
+
+
 def _call_groq(prompt: str, system: str) -> str:
     from groq import Groq  # imported lazily: jobs-only dependency path
 

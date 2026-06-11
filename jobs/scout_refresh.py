@@ -335,6 +335,7 @@ class RunStats:
     llm_skips: int = 0
     rejected_not_on_page: int = 0
     rejected_institutions: int = 0
+    memory_embedded: int = 0
     touched_brand_ids: set[int] = field(default_factory=set)
 
     def as_dict(self) -> dict[str, int]:
@@ -457,6 +458,14 @@ def main() -> int:
                 stats.leads_new += 1
             else:
                 stats.leads_rescored += 1
+
+        # Phase 5 safety net: embed winning decks the online path missed.
+        try:
+            from core.pitch_memory import backfill_missing
+
+            stats.memory_embedded = backfill_missing(client, limit=10)
+        except Exception as exc:  # noqa: BLE001 — memory is never run-fatal
+            logger.warning("pitch_memory backfill skipped: %s", exc)
 
         if stats.pages_failed or stats.llm_skips:
             status = "partial"

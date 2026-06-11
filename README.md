@@ -78,6 +78,20 @@ Scout finds real sponsor leads automatically. One-time setup:
 Decks are archived versioned (`deck_v1`, `deck_v2`, …) — regenerating never
 overwrites an older deck.
 
+## Setup (Phase 5 — The Loop)
+
+1. **Apply the Loop migration**: SQL Editor → paste all of
+   [supabase/migrations/004_loop.sql](supabase/migrations/004_loop.sql) → Run.
+2. That's it. From now on: after every pitch you send, tap the result on the
+   **Outcomes** page. One tap logs it and updates the Lead Board atomically.
+   Mis-tapped? Undo your own entry within 10 minutes (admins can undo anything).
+3. **The 50-outcome rule**: Smart Ranking (a model trained on YOUR logged
+   outcomes) switches on only after 50 real outcomes exist — the Home page
+   shows progress. Until then the transparent Evidence Score does the ranking,
+   and even after, it never disappears. Decks also quietly reuse the language
+   of pitches that earned replies (style only, never facts).
+4. Practice freely on 🧪 demo leads — practice taps never enter training data.
+
 ## Roles
 
 | Role | Can do |

@@ -119,6 +119,17 @@ def fetch_latest_scout_run() -> dict[str, Any] | None:
     return rows[0] if rows else None
 
 
+def fetch_outcomes(limit: int = 300) -> list[dict[str, Any]]:
+    """Recent outcomes with lead/brand names and logger, newest first."""
+    client = get_client()
+    query = (
+        client.table("outcomes")
+        .select("*, leads(is_demo, brands(name)), logger:profiles!logged_by(name)")
+        .order("logged_at", desc=True).limit(limit)
+    )
+    return _safe_rows(query, "outcomes")
+
+
 def lead_status_counts() -> dict[str, int]:
     """Count of leads per status for the Home pipeline summary."""
     counts: dict[str, int] = {}

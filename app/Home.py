@@ -106,6 +106,33 @@ def _dashboard(role: str) -> None:
             for status, count in sorted(counts.items())
         ))
 
+    # --- The Loop: real-outcome funnel + progress toward Smart Ranking ---
+    from core import outcomes as outcomes_core
+
+    all_outcomes = db.fetch_outcomes(500)
+    real = [o for o in all_outcomes if not (o.get("leads") or {}).get("is_demo")]
+    funnel = outcomes_core.funnel_stats(real)
+    st.subheader("How outreach is going")
+    if funnel["logged_total"] == 0:
+        st.caption("No real outcomes logged yet — every pitch you log on the "
+                   "Outcomes page shows up here. (🧪 practice taps are excluded.)")
+    else:
+        funnel_cols = st.columns(4)
+        funnel_cols[0].metric("Contacted", funnel["contacted"],
+                              help="Leads we've actually reached out to.")
+        funnel_cols[1].metric("Replied", funnel["replied"],
+                              help=f"Reply rate: {funnel['reply_rate'] or 0}% of contacted.")
+        funnel_cols[2].metric("Meetings", funnel["meeting"],
+                              help="Leads that agreed to talk.")
+        funnel_cols[3].metric(
+            "Signed 🎉", funnel["signed"],
+            help=(f"Close rate: {funnel['close_rate'] or 0}%. "
+                  f"Total value: ₹{funnel['signed_value']:,.0f}"),
+        )
+    fraction, caption = outcomes_core.ranker_progress(len(real))
+    st.progress(fraction)
+    st.caption(caption)
+
     with st.sidebar:
         st.markdown(f"**{auth.current_name()}** · `{role}`")
         if st.button("Log out", use_container_width=True):
