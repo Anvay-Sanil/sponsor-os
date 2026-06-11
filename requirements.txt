@@ -13,7 +13,12 @@ httpx>=0.27
 beautifulsoup4>=4.12
 pyyaml>=6.0
 groq>=0.13
-google-generativeai>=0.8
+# google-genai replaced the EOL'd google-generativeai (Phase 6 migration);
+# it also powers search-grounded brand research and 768-dim embeddings.
+google-genai>=1.0
 # Phase 3 (Pitch): deck rendering + palette extraction — light wheels, no torch.
 python-pptx>=1.0
 Pillow>=10.0
+# Phase 6: session persistence — stores ONLY the Supabase refresh token in a
+# 7-day cookie so juniors aren't re-typing passwords every visit.
+extra-streamlit-components>=0.1.80

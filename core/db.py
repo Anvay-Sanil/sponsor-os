@@ -55,8 +55,10 @@ def _safe_rows(query: Any, what: str) -> list[dict[str, Any]]:
     try:
         response = query.execute()
         return response.data or []
-    except Exception as exc:  # noqa: BLE001 — any DB error must not crash a page
-        logger.error("Query for %s failed: %s", what, exc)
+    except Exception:  # noqa: BLE001 — any DB error must not crash a page
+        # Suppress-but-log rule: junior sees the friendly line, the full
+        # traceback lands in the app logs for the maintainer.
+        logger.exception("Query for %s failed", what)
         st.warning(f"Couldn't load {what} right now. Check your connection and refresh.")
         return []
 

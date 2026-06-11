@@ -47,19 +47,19 @@ class LLMUnavailableError(RuntimeError):
 # text-embedding-004 was retired by Google (404, verified live 2026-06-11);
 # gemini-embedding-001 is the GA replacement. output_dimensionality=768 is
 # REQUIRED — its native 3072 dims would not fit pitch_memory vector(768).
-EMBED_MODEL = os.environ.get("GEMINI_EMBED_MODEL", "models/gemini-embedding-001")
+EMBED_MODEL = os.environ.get("GEMINI_EMBED_MODEL", "gemini-embedding-001")
 EMBED_DIMS = 768
 
 
 def _call_embed(text: str) -> list[float]:
-    import google.generativeai as genai  # lazy: same EOL-SDK caveat as _call_gemini
+    from google.genai import types
 
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise LLMUnavailableError("GEMINI_API_KEY not configured")
-    genai.configure(api_key=api_key)
-    return genai.embed_content(model=EMBED_MODEL, content=text[:8000],
-                               output_dimensionality=EMBED_DIMS)["embedding"]
+    result = _gemini_client().models.embed_content(
+        model=EMBED_MODEL,
+        contents=text[:8000],
+        config=types.EmbedContentConfig(output_dimensionality=EMBED_DIMS),
+    )
+    return list(result.embeddings[0].values)
 
 
 # Tests monkeypatch this; embed_text below stays graceful either way.
@@ -102,17 +102,33 @@ def _call_groq(prompt: str, system: str) -> str:
     return response.choices[0].message.content or ""
 
 
-def _call_gemini(prompt: str, system: str) -> str:
-    import google.generativeai as genai  # lazy: jobs-only dependency path
+_GENAI_CLIENT = None  # module-level singleton: a GC'd google-genai Client
+#                       closes its httpx transport and kills in-flight calls.
 
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise LLMUnavailableError("GEMINI_API_KEY not configured")
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(GEMINI_MODEL, system_instruction=system)
-    response = model.generate_content(
-        prompt,
-        generation_config={"response_mime_type": "application/json", "temperature": 0},
+
+def _gemini_client():  # noqa: ANN202 — google-genai Client, lazily imported
+    global _GENAI_CLIENT
+    if _GENAI_CLIENT is None:
+        from google import genai  # supported SDK (google-generativeai is EOL)
+
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            raise LLMUnavailableError("GEMINI_API_KEY not configured")
+        _GENAI_CLIENT = genai.Client(api_key=api_key)
+    return _GENAI_CLIENT
+
+
+def _call_gemini(prompt: str, system: str) -> str:
+    from google.genai import types
+
+    response = _gemini_client().models.generate_content(
+        model=GEMINI_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=system,
+            response_mime_type="application/json",
+            temperature=0,
+        ),
     )
     return response.text or ""
 

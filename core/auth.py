@@ -74,13 +74,92 @@ def current_name() -> str:
 
 
 def logout() -> None:
-    """Sign out and clear all session auth state."""
+    """Sign out, clear the persisted cookie, clear all session auth state."""
+    clear_persisted_session()
     try:
         get_client().auth.sign_out()
     except Exception as exc:  # noqa: BLE001 — logout must always succeed locally
         logger.warning("Supabase sign_out failed: %s", exc)
     for key in ("user", "role", "name", "sb_client"):
         st.session_state.pop(key, None)
+
+
+# ---------------------------------------------------------------------------
+# Session persistence (Phase 6): ONLY the refresh token, 7-day cookie.
+# The access token never leaves memory. unsafe_allow_html is banned app-wide
+# (enforced by tests) so the XSS surface this depends on stays closed.
+# ---------------------------------------------------------------------------
+REFRESH_COOKIE = "sos_refresh"
+
+
+def _cookies():  # noqa: ANN202 — stx CookieManager or None
+    """Per-session CookieManager; None when unavailable (tests, bare mode)."""
+    try:
+        import extra_streamlit_components as stx
+
+        if "sos_cookie_mgr" not in st.session_state:
+            st.session_state.sos_cookie_mgr = stx.CookieManager(key="sos_cookies")
+        return st.session_state.sos_cookie_mgr
+    except Exception:  # noqa: BLE001 — persistence is an enhancement
+        return None
+
+
+def persist_refresh_token(token: str | None) -> None:
+    """Best-effort: remember the refresh token for 7 days."""
+    from datetime import datetime, timedelta, timezone
+
+    manager = _cookies()
+    if manager is None or not token:
+        return
+    try:
+        manager.set(REFRESH_COOKIE, token,
+                    expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+                    key="sos_set_refresh")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not persist session cookie: %s", exc)
+
+
+def clear_persisted_session() -> None:
+    manager = _cookies()
+    if manager is None:
+        return
+    try:
+        manager.delete(REFRESH_COOKIE, key="sos_del_refresh")
+    except Exception:  # noqa: BLE001 — cookie may simply not exist
+        pass
+
+
+def restore_from_cookie() -> bool:
+    """Try to resume a session from the cookie. Tolerates the component not
+    being mounted yet (first script run) — it simply returns False that run."""
+    if current_user() is not None:
+        return False
+    manager = _cookies()
+    if manager is None:
+        return False
+    try:
+        token = manager.get(REFRESH_COOKIE)
+    except Exception:  # noqa: BLE001
+        return False
+    if not token:
+        return False
+    client = get_client()
+    try:
+        result = client.auth.refresh_session(token)
+    except Exception as exc:  # noqa: BLE001 — expired/rotated-away token
+        logger.info("Cookie session restore failed: %s", exc)
+        clear_persisted_session()
+        return False
+    if result.session is None or result.user is None:
+        return False
+    client.postgrest.auth(result.session.access_token)
+    profile = _load_profile(result.user.id)
+    _store_session(result.user,
+                   profile.get("role") if profile else None,
+                   profile.get("name") if profile else None)
+    # Supabase rotates refresh tokens on use — persist the NEW one.
+    persist_refresh_token(result.session.refresh_token)
+    return True
 
 
 def _friendly_auth_error(exc: Exception) -> str:
@@ -102,7 +181,7 @@ def _friendly_auth_error(exc: Exception) -> str:
         return "Password is too short — use at least 6 characters."
     if "rate" in text or "429" in text:
         return "Too many tries — wait a minute and try again."
-    logger.error("Auth error: %s", exc)
+    logger.exception("Unrecognized auth error")
     return "Something went wrong talking to the login service. Try again in a moment."
 
 
@@ -147,6 +226,7 @@ def login(email: str, password: str) -> tuple[bool, str]:
         profile.get("role") if profile else None,
         profile.get("name") if profile else None,
     )
+    persist_refresh_token(result.session.refresh_token)
     return True, "ok"
 
 
@@ -176,6 +256,7 @@ def signup(invite_code: str, name: str, email: str, password: str) -> tuple[bool
             "OFF 'Confirm email' in Supabase Auth settings (see README), then log in here."
         )
     client.postgrest.auth(result.session.access_token)
+    persist_refresh_token(result.session.refresh_token)
 
     # 3. Redeem atomically: creates the profile with the code's role.
     return _redeem(client, code, name, result.user)

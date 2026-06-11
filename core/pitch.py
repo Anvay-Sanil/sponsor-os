@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -153,15 +154,33 @@ def assemble_email(narrative: DeckNarrative, is_test: bool) -> str:
 # ---------------------------------------------------------------------------
 # LLM stages
 # ---------------------------------------------------------------------------
-def research_brand(brand: dict[str, Any], evidence: list[dict[str, Any]]) -> BrandResearch | None:
-    """Profile the brand via the normal provider chain; None means "skip
-    research", never an error.
+def _grounded_research(prompt: str) -> str | None:
+    """Search-grounded Gemini (google-genai SDK, Phase 6). Best-effort bonus:
+    no JSON response_mime (incompatible with grounding) — caller validates.
+    Quota exhaustion or any error just means the plain chain takes over."""
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        return None
+    try:
+        from google.genai import types
 
-    NOTE on grounding: the brief asks for search-grounded Gemini here, but
-    grounding for 2.x models is unsupported by the EOL'd google-generativeai
-    SDK (and gemini-1.5/2.0 free quota is gone — verified live 2026-06-11).
-    Grounding returns with the google-genai SDK migration planned for Phase 6.
-    """
+        response = llm._gemini_client().models.generate_content(
+            model=llm.GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                tools=[types.Tool(google_search=types.GoogleSearch())],
+                temperature=0,
+            ),
+        )
+        return response.text
+    except Exception as exc:  # noqa: BLE001 — grounding is a bonus, never a blocker
+        logger.info("Grounded research unavailable: %s", exc)
+        return None
+
+
+def research_brand(brand: dict[str, Any], evidence: list[dict[str, Any]]) -> BrandResearch | None:
+    """Profile the brand: search-grounded Gemini first (per the brief),
+    plain provider chain as fallback; None means "skip research", never an error."""
     prompt = (
         "Research this brand for a student-fest sponsorship pitch. Be concise. Reply "
         'with ONLY JSON: {"summary": str, "audience": str, "india_activity": str, '
@@ -171,6 +190,12 @@ def research_brand(brand: dict[str, Any], evidence: list[dict[str, Any]]) -> Bra
         "Evidence we hold: "
         + "; ".join((item.get("snippet") or "")[:120] for item in evidence[:5])
     )
+    grounded = _grounded_research(prompt)
+    if grounded:
+        try:
+            return BrandResearch.model_validate(json.loads(llm._strip_fences(grounded)))
+        except Exception:  # noqa: BLE001 — unparseable grounded output => plain chain
+            logger.info("Grounded output not valid JSON; using plain chain.")
     try:
         return llm.extract_json(prompt, BrandResearch)
     except llm.LLMUnavailableError:

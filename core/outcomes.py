@@ -1,4 +1,4 @@
-"""Outcome logging and funnel math. The learning loop's front door.
+﻿"""Outcome logging and funnel math. The learning loop's front door.
 
 Writes go through the atomic `log_outcome` / `void_outcome` Postgres RPCs
 (migration 004): one tap = outcomes row + lead status in ONE transaction, so
@@ -121,7 +121,7 @@ def log_outcome(client: Any, lead_id: int, event: str,
         }).execute()
         return True, f"Logged {EVENT_LABELS.get(event, event)} — lead status updated too."
     except Exception as exc:  # noqa: BLE001
-        logger.error("log_outcome failed: %s", exc)
+        logger.exception("log_outcome failed")
         if "NOT_ALLOWED" in str(exc):
             return False, "Your role can't log outcomes — ask a sponsorship member."
         return False, "Couldn't save that — check your connection and tap once more."
@@ -135,5 +135,5 @@ def void_outcome(client: Any, outcome_id: int) -> tuple[bool, str]:
     except Exception as exc:  # noqa: BLE001
         if "VOID_WINDOW_CLOSED" in str(exc):
             return False, "The 10-minute undo window has passed — ask an admin to fix it."
-        logger.error("void_outcome failed: %s", exc)
+        logger.exception("void_outcome failed")
         return False, "Couldn't undo — try again."

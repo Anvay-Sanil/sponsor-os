@@ -1,138 +1,174 @@
 # Sponsor OS 🤝
 
-The ACM SIGAI MUJ sponsorship pipeline: **Scout** finds sponsor leads from public
-evidence, **Price** turns our event inventory into honestly-priced tiers, **Pitch**
-builds a bespoke deck + email per lead — and every logged outcome makes it smarter.
+The ACM SIGAI MUJ sponsorship pipeline. Three stages, one loop:
 
-Runs entirely on free tiers. Total infrastructure cost: **₹0**.
+- **Scout** finds sponsor leads from public evidence (rival fest sites, news) — weekly, automatically.
+- **Price** turns our event inventory into honest reach estimates with uncertainty ranges.
+- **Pitch** builds a bespoke branded deck + cold email per lead, in ~30 seconds.
+- **The Loop**: every outcome you log makes the ranking and the pitch language smarter.
 
-> This is the Phase 1 README (skeleton + auth). The full non-technical deployment
-> guide ships in Phase 6.
+Total infrastructure cost: **₹0, forever** (Supabase, Streamlit Cloud, GitHub Actions,
+Groq and Gemini free tiers, Colab for heavy jobs).
 
-## Setup (Phase 1)
+---
 
-1. **Create a Supabase project** (free tier) at [supabase.com](https://supabase.com).
-2. **Apply the schema**: Dashboard → SQL Editor → paste all of
-   [supabase/schema.sql](supabase/schema.sql) → Run.
-3. **Turn off email confirmation**: Authentication → Sign In / Up → Email →
-   disable **"Confirm email"**. (Invite codes replace email verification so juniors
-   can sign up instantly on their phones.)
-4. **Configure secrets**: copy `.env.example` to `.env` and fill in
-   `SUPABASE_URL`, `SUPABASE_KEY` (anon), and `SUPABASE_SERVICE_KEY`
-   (Dashboard → Settings → API). Never commit `.env`.
-5. **Install and seed**:
-   ```bash
-   uv venv && uv pip install -r requirements.txt   # or: pip install -r requirements.txt
-   python jobs/seed_demo.py
+## Deploy from zero (~30 minutes, no coding)
+
+You need: a chapter Google account, a chapter GitHub account/org (see
+[Account ownership](#account-ownership--this-must-outlive-you)), and this repository.
+
+### A. Database (Supabase, ~7 min)
+
+1. [supabase.com](https://supabase.com) → New project → name `sponsor-os`,
+   region **Mumbai**, free plan. Save the database password somewhere safe.
+2. SQL Editor → New query → paste ALL of [supabase/schema.sql](supabase/schema.sql)
+   → Run → expect `Success. No rows returned`.
+   *(Fresh installs need only this one file — it includes every migration.)*
+3. Authentication → Sign In / Up → Email → turn **OFF "Confirm email"**.
+4. Storage → confirm a private bucket `decks` exists (schema migration 003 creates it
+   on existing projects; on a brand-new project create it: New bucket → `decks` → private).
+5. Project Settings → API: copy the **Project URL**, **anon** key, and
+   **service_role** key.
+
+### B. Free AI keys (~5 min)
+
+- **Groq**: [console.groq.com](https://console.groq.com) → API Keys → create → copy (`gsk_…`).
+- **Gemini**: [aistudio.google.com](https://aistudio.google.com) → Get API key → copy (`AIza…`).
+
+### C. GitHub (~5 min)
+
+1. Fork or push this repo to the **chapter's** GitHub org, private.
+2. Repo → Settings → Secrets and variables → Actions → add four secrets:
+   `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`.
+3. Actions tab → enable workflows. Scout now runs every Monday ~8:30 AM IST
+   (and keeps the free database awake).
+
+### D. The app (Streamlit Community Cloud, ~7 min)
+
+1. [share.streamlit.io](https://share.streamlit.io) → sign in with the chapter GitHub
+   → **New app** → pick the repo, branch `main`, main file **`app/Home.py`**.
+2. Advanced settings → Secrets → paste (with your values):
+   ```toml
+   SUPABASE_URL = "https://YOUR-REF.supabase.co"
+   SUPABASE_KEY = "YOUR-ANON-KEY"
+   GROQ_API_KEY = "gsk_..."
+   GEMINI_API_KEY = "AIza..."
+   GITHUB_ACTIONS_URL = "https://github.com/YOUR-ORG/sponsor-os/actions"
    ```
-   The seed script prints **invite codes** (one per role) and fills the Lead Board
-   with 10 clearly-marked 🧪 demo brands.
-6. **Run the app**:
-   ```bash
-   streamlit run app/Home.py
-   ```
-   Sign up with the printed **admin** code first, then invite everyone else from
-   the Admin page.
+   ⚠️ The **service_role key never goes in Streamlit secrets** — it belongs only in
+   GitHub Actions secrets and a local `.env`.
+3. Deploy. First build takes a few minutes.
 
-## Setup (Phase 2 — Scout)
+### E. First data + first admin (~5 min)
 
-Scout finds real sponsor leads automatically. One-time setup:
+On any laptop with Python: copy `.env.example` → `.env`, fill the Supabase values, then
 
-1. **Apply the Scout migration**: Supabase Dashboard → SQL Editor → paste all of
-   [supabase/migrations/002_scout.sql](supabase/migrations/002_scout.sql) → Run.
-   (Fresh installs that ran the current `schema.sql` already have it.)
-2. **Get free LLM keys** and add to `.env`:
-   - `GROQ_API_KEY` — [console.groq.com](https://console.groq.com) → API Keys
-   - `GEMINI_API_KEY` — [aistudio.google.com](https://aistudio.google.com) → Get API key
-3. **Test locally** (optional but recommended):
-   ```bash
-   python jobs/scout_refresh.py
-   ```
-   Watch the log; afterwards the Lead Board shows real brands with evidence links,
-   and Admin shows the run summary.
-4. **Automate on GitHub**: push this repo to GitHub, then in the repo →
-   Settings → Secrets and variables → Actions, add: `SUPABASE_URL`,
-   `SUPABASE_SERVICE_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`.
-   Scout then runs every Monday ~8:30 AM IST, and on demand via
-   Actions → "Scout refresh" → Run workflow. The weekly run also keeps the
-   free Supabase project from pausing.
-5. Optional: add `GITHUB_ACTIONS_URL` (your repo's Actions page URL) to
-   Streamlit secrets to get a "Run Scout now" button on the Admin page.
+```bash
+pip install -r requirements.txt
+python jobs/seed_demo.py        # demo data + invite codes printed to console
+```
 
-## Setup (Phase 3 — Pitch)
+Open the deployed app → **Sign up with invite code** using the printed **admin** code.
+Generate codes for everyone else from the Admin page. Trigger the first Scout run
+from GitHub → Actions → Scout refresh → Run workflow.
 
-1. **Apply the Pitch migration**: SQL Editor → paste all of
-   [supabase/migrations/003_pitch.sql](supabase/migrations/003_pitch.sql) → Run.
-   Creates the private `decks` storage bucket and its access rules.
-2. **Fill in the chapter facts** (admin, one time): edit
-   [core/chapter_facts.py](core/chapter_facts.py) and replace every
-   `[UPDATE ME …]` with REAL numbers — past gate counts, the actual Instagram
-   follower count, the official fest name and dates. **Never inflate**: these go
-   into documents sponsors read and may verify.
-   Until this is done, decks for real brands are locked; demo leads produce
-   watermarked 🧪 TEST decks for practice.
-3. Generate: Lead Board → pick a lead → **Generate Deck** → download the PPTX
-   and copy the email. **Review and edit before sending. Never send unread AI
-   output.** There is no send button anywhere, on purpose.
+### F. Before going live with real outreach
 
-Decks are archived versioned (`deck_v1`, `deck_v2`, …) — regenerating never
-overwrites an older deck.
+1. Fill **[core/chapter_facts.py](core/chapter_facts.py)** with REAL numbers (real
+   gate counts, real follower counts — sponsors verify; never inflate). Decks for
+   real brands stay locked until every `[UPDATE ME]` is gone.
+2. Purge demo data (SQL Editor):
+   `delete from leads where is_demo; delete from brands where is_demo;`
+3. Refit pricing with real observations: run
+   [notebooks/fit_pricing_model.ipynb](notebooks/fit_pricing_model.ipynb) in Colab.
 
-## Setup (Phase 5 — The Loop)
+---
 
-1. **Apply the Loop migration**: SQL Editor → paste all of
-   [supabase/migrations/004_loop.sql](supabase/migrations/004_loop.sql) → Run.
-2. That's it. From now on: after every pitch you send, tap the result on the
-   **Outcomes** page. One tap logs it and updates the Lead Board atomically.
-   Mis-tapped? Undo your own entry within 10 minutes (admins can undo anything).
-3. **The 50-outcome rule**: Smart Ranking (a model trained on YOUR logged
-   outcomes) switches on only after 50 real outcomes exist — the Home page
-   shows progress. Until then the transparent Evidence Score does the ranking,
-   and even after, it never disappears. Decks also quietly reuse the language
-   of pitches that earned replies (style only, never facts).
-4. Practice freely on 🧪 demo leads — practice taps never enter training data.
+## Daily use (the 30-second version per page)
+
+- **Lead Board** — every brand, ranked by Evidence Score; tap a row for the proof.
+  `Assign to me` to claim, `Generate Deck` to pitch, `Log Outcome` after contact.
+- **Deck Generator** — pick lead → ~30s → download PPTX + copy the email.
+  **Review and edit before sending. Never send unread AI output.** There is no
+  send button anywhere, on purpose. 🧪 demo leads make watermarked practice decks.
+- **Tier Simulator** — build a package, see honest reach ranges and ₹-per-view.
+- **Outcomes** — after every pitch: one tap. Mis-tap? Undo within 10 minutes.
+  Every real tap moves the Home progress bar toward Smart Ranking (activates at 50).
+- **Admin** — invite codes, roles, rival-fest seeds, last Scout run.
 
 ## Roles
 
 | Role | Can do |
 |------|--------|
-| `admin` | Everything: members, invite codes, corrections, destructive actions |
-| `sponsorship` | Lead Board, generate decks, log outcomes, tier simulator |
-| `analyst` | Lead Board (read-only), tier simulator, dashboards |
-| `viewer` | Dashboards only (faculty advisors / chapter leads) |
+| `admin` | Everything: members, codes, corrections, destructive actions |
+| `sponsorship` | Leads, decks, outcomes, simulator |
+| `analyst` | Read-only leads, simulator, dashboards |
+| `viewer` | Dashboards only (faculty advisors) |
+
+---
+
+## Account ownership — this must outlive you
+
+The whole point of Sponsor OS is that chapter knowledge survives graduation. That
+fails trivially if the accounts are personal. **Rule: Supabase, Google AI Studio
+(Gemini key), Groq, GitHub, and Streamlit Cloud all belong to chapter-controlled
+identities** — a chapter Gmail and a chapter GitHub org (free) — never to whoever
+happened to build or deploy it.
+
+### Committee transition ritual (every handover, ~30 min)
+
+1. Transfer/verify chapter ownership of all five accounts above.
+2. **Rotate** the Supabase service_role key and both AI keys; update GitHub Actions
+   secrets, Streamlit secrets, and local `.env`s.
+3. Make the incoming lead an `admin` in the app; demote/remove departed members.
+4. Regenerate invite codes (old ones expire in 30 days anyway).
+5. Walk through [DEMO.md](DEMO.md) together once.
+
+### Maintenance calendar
+
+| When | What |
+|------|------|
+| Semester start | Check GitHub → Actions: last Scout run green? (Heartbeat commits keep the schedule alive, but verify.) |
+| Before real outreach | Demo purge + chapter facts filled (section F) |
+| After each fest | Refit pricing notebook with the new footfall/reel numbers |
+| At 50 logged outcomes | Run [notebooks/train_ranker.ipynb](notebooks/train_ranker.ipynb) — Smart Ranking activates |
+| Committee transition | The ritual above |
+
+---
 
 ## Troubleshooting
 
-- **"Forgot password" / typo'd email at signup** — email confirmation is off, so
-  there is no self-service reset. An admin fixes it in 30 seconds: Supabase
-  Dashboard → Authentication → Users → find the user → **⋯ → Reset password**
-  (or delete the user and issue a fresh invite code).
-- **App says it's not connected to its database** — secrets are missing. Locally:
-  check `.env`. On Streamlit Cloud: App settings → Secrets.
-- **Everything logged me out after a refresh** — known Phase 1 papercut, not a
-  bug: sessions live only in browser-tab memory for now. Just log in again.
-- **Supabase project "paused"** — the free tier pauses after 7 idle days. Open
-  the dashboard and click Restore. (From Phase 2, the weekly Scout cron keeps it
-  awake.)
-- **Scout stopped running on its own** — GitHub disables scheduled workflows
-  after 60 days without repo activity. Our workflow makes a tiny "heartbeat"
-  commit every scheduled run precisely to prevent this, but if it ever happens
-  (e.g. the workflow was disabled manually): GitHub → Actions → Scout refresh →
-  banner button **"Enable workflow"**. Worth a calendar reminder at semester
-  start: check that the last Scout run is green.
-- **Scout run says "partial"** — some site was down or an AI provider was
-  rate-limited. Nothing is broken: every run re-checks everything, so the next
-  run fills the gaps. Only investigate if it stays partial for weeks.
+- **Where's the real error?** Juniors see friendly messages, never tracebacks — the
+  full trace is in **Streamlit Cloud → Manage app → Logs** (and in `scout_runs.log`
+  for Scout, GitHub Actions logs for the cron). Start every debugging session there.
+- **Forgot password / typo'd signup email** — email confirmation is off, so no
+  self-service reset: Supabase → Authentication → Users → ⋯ → Reset password.
+- **"Not connected to its database"** — secrets missing/wrong (app settings → Secrets).
+- **Logged out after refresh** — shouldn't happen anymore (7-day cookie); if it
+  persists, the browser is blocking cookies.
+- **Supabase paused** — free tier pauses after 7 idle days; dashboard → Restore.
+  The Monday cron normally prevents this.
+- **Scout stopped running** — GitHub → Actions → Scout refresh → "Enable workflow"
+  button. Run says `partial`? A site or AI provider was down; next run self-heals.
+- **AI says it's busy** — free-tier rate limits; wait a minute. Persistent? Check
+  both API keys are valid.
 
-## Demo data
+## Contributing rules (enforced by tests)
 
-Seeded rows are marked **🧪 demo** in the UI and `is_demo=true` in the database.
-**Never contact a brand based on demo evidence.** Going live? Run in the SQL editor:
+- **Never `unsafe_allow_html=True`** — this app renders scraped and LLM-derived
+  text; raw HTML would open an injection surface (a test fails the build if it appears).
+- **No heavy ML deps in requirements.txt** (torch/jax/xgboost live in Colab notebooks).
+- Friendly error + `logger.exception` in every failure path; honest numbers only —
+  intervals over point estimates, evidence links over claims.
+- Run `pytest -q` before committing (176 tests).
 
-```sql
-delete from leads where is_demo;
-delete from brands where is_demo;
-```
+## Post-handoff backlog (recorded decisions, not forgotten ideas)
+
+- Playwright rendering for JS-heavy fest sites (when a seed actually needs it)
+- Instagram enrichment behind the feature flag (brittle; fest sites are primary)
+- Fuzzy brand-name matching (exact normalized match has been sufficient)
+- Learning-to-rank objective + per-lead pricing (≥500 outcomes)
+- Audience-overlap modeling in bundle reach (currently "up to" language absorbs it)
 
 ## Tests
 

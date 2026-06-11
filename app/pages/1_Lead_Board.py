@@ -1,9 +1,12 @@
 """Lead Board — the home workspace: search, filter, inspect evidence, take action."""
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import streamlit as st
+
+logger = logging.getLogger(__name__)
 
 import _bootstrap  # noqa: F401
 from core import auth, db
@@ -164,6 +167,7 @@ if not read_only:
             st.success("This lead is yours now.")
             st.rerun()
         except Exception:  # noqa: BLE001
+            logger.exception("Assign-to-me failed")
             st.error("Couldn't assign — check your connection and try again.")
     deck_label = "🧪 Test Deck" if is_demo else "🎨 Generate Deck"
     if action_cols[1].button(

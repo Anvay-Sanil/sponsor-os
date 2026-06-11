@@ -141,6 +141,8 @@ def _dashboard(role: str) -> None:
 
 
 user = auth.current_user()
+if user is None and auth.restore_from_cookie():
+    st.rerun()  # session resumed from the 7-day cookie — no re-login needed
 if user is None:
     _login_screen()
 elif auth.current_role() is None:

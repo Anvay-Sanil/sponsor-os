@@ -1,11 +1,14 @@
-"""Admin — invite codes, member roles; Scout controls arrive in Phase 2."""
+﻿"""Admin — invite codes, member roles, Scout seeds and run status."""
 from __future__ import annotations
 
+import logging
 import secrets
 import string
 from datetime import datetime, timedelta, timezone
 
 import streamlit as st
+
+logger = logging.getLogger(__name__)
 
 import _bootstrap  # noqa: F401
 from core import auth, db
@@ -34,6 +37,7 @@ with st.form("new_invite"):
             ).execute()
             st.success(f"New **{role_choice}** code (copy and share it): `{code}`")
         except Exception:  # noqa: BLE001
+            logger.exception("Invite code creation failed")
             st.error("Couldn't create the code — check your connection and try again.")
 
 codes = db.fetch_invite_codes()
@@ -82,6 +86,7 @@ if profiles:
                 st.success(f"{picked} is now **{new_role}**.")
                 st.rerun()
             except Exception:  # noqa: BLE001
+                logger.exception("Role change failed")
                 st.error("Couldn't change the role — try again.")
 else:
     st.caption("No members yet.")
@@ -151,6 +156,7 @@ if seeds:
                 ).eq("id", seed_row["id"]).execute()
                 st.rerun()
             except Exception:  # noqa: BLE001
+                logger.exception("Seed toggle failed")
                 st.error("Couldn't update the seed — try again.")
 else:
     st.caption("No seeds yet — the first Scout run imports the starter list automatically.")
@@ -178,6 +184,7 @@ with st.form("add_seed"):
                 st.success(f"Added {seed_name}. Scout will include it on its next run.")
                 st.rerun()
             except Exception:  # noqa: BLE001
+                logger.exception("Seed add failed")
                 st.error("Couldn't add it — is that URL already in the list?")
 
 st.caption(

@@ -8,5 +8,11 @@ font = "sans serif"
 [browser]
 gatherUsageStats = false
 
+[client]
+# Juniors never see tracebacks; full traces still land in the app logs
+# (Streamlit Cloud -> Manage app -> Logs) because every friendly-error path
+# pairs with logger.exception. See README troubleshooting.
+showErrorDetails = "none"
+
 [server]
 headless = true

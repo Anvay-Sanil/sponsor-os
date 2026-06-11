@@ -5,11 +5,15 @@ There is no send button. Sending is a human act.
 """
 from __future__ import annotations
 
+import logging
+
 import streamlit as st
 
 import _bootstrap  # noqa: F401
 from core import auth, db, pitch
 from core.chapter_facts import missing_facts
+
+logger = logging.getLogger(__name__)
 
 st.set_page_config(page_title="Deck Generator · Sponsor OS", page_icon="🎨", layout="wide")
 auth.require_role("deck_generator")
@@ -75,6 +79,7 @@ if st.button("Generate deck", type="primary", use_container_width=True):
     except RuntimeError as exc:
         st.error(str(exc))
     except Exception:  # noqa: BLE001 — never show a junior a traceback
+        logger.exception("Deck generation failed unexpectedly")  # full trace -> app logs
         st.error("Something unexpected went wrong building this deck. Try once more; "
                  "if it repeats, tell an admin.")
 
